@@ -3,3 +3,10 @@ venv/
 
 # Credentials
 credentials.json
+
+#temporal 
+/tmp
+
+# pycache
+
+/airflow/tasks/pycache
