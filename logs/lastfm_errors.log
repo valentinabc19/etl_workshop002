@@ -12,3 +12,4 @@
 2025-04-11 02:38:17.969354: Exception en Phyno: Expecting value: line 1 column 1 (char 0)
 2025-04-11 02:54:55.981783: Exception en The Handsome Family: Expecting value: line 1 column 1 (char 0)
 2025-04-11 02:55:13.996874: Exception en The Kentucky Colonels: Expecting value: line 1 column 1 (char 0)
+2025-04-11 16:04:45.896047: Error loading artists: 'primary_artist'

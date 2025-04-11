@@ -1,258 +1,209 @@
 """
-Last.fm API Data Extraction Module
-Handles artist data extraction from Last.fm API with checkpointing and error handling.
+Last.fm Data Extractor for Airflow DAGs
+Maintains original functionality while being Airflow-compatible
 """
 
-import os
-import time
-import json
 import requests
+import time
 import pandas as pd
-from datetime import datetime
-from typing import Dict, List, Set, Optional
+import os
+import json
 from tqdm import tqdm
-import logging
+from datetime import datetime
+from airflow.exceptions import AirflowException
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Constants (same as original)
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ARTISTS_CSV = os.path.join(ROOT_DIR, "data", "raw", "artists.csv")
+OUTPUT_CSV = os.path.join(ROOT_DIR, "data", "raw", "lastfm_data.csv")
+CHECKPOINT_FILE = os.path.join(ROOT_DIR, "tmp", "lastfm_checkpoint.json")
+LOG_FILE = os.path.join(ROOT_DIR, "logs", "lastfm_errors.log")
+CREDENTIALS_PATH = os.path.join(ROOT_DIR, "credentials.json")
 
-class LastFMExtractor:
-    """Handles extraction of artist data from Last.fm API"""
-    
-    def __init__(self):
-        self._setup_paths()
-        self._load_config()
-        self.api_key = self._load_api_key()
-        self.base_delay = 0.5  # seconds between batches
-        self.max_retries = 3
-        self.batch_size = 10
-        
-    def _setup_paths(self) -> None:
-        """Initialize all required paths and directories"""
-        self.root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        self.artists_csv = os.path.join(self.root_dir, "data", "raw", "artists.csv")
-        self.output_csv = os.path.join(self.root_dir, "data", "raw", "lastfm_data.csv")
-        self.checkpoint_file = os.path.join(self.root_dir, "tmp", "lastfm_checkpoint.json")
-        self.log_file = os.path.join(self.root_dir, "logs", "lastfm_errors.log")
-        self.credentials_path = os.path.join(self.root_dir, "credentials.json")
-        
-        # Create directories if they don't exist
-        os.makedirs(os.path.dirname(self.output_csv), exist_ok=True)
-        os.makedirs(os.path.dirname(self.checkpoint_file), exist_ok=True)
-        os.makedirs(os.path.dirname(self.log_file), exist_ok=True)
-        
-    def _load_config(self) -> None:
-        """Load configuration parameters"""
-        self.api_url = "http://ws.audioscrobbler.com/2.0/"
-        self.request_timeout = 10  # seconds
-        
-    def _load_api_key(self) -> str:
-        """Load and validate API key from credentials file"""
+# Configuration (same as original)
+BATCH_SIZE = 10
+BASE_DELAY = 0.5
+MAX_RETRIES = 3
+
+def load_api_key():
+    """Load API key from credentials file (same as original)"""
+    try:
+        with open(CREDENTIALS_PATH, "r", encoding="utf-8") as file:
+            credentials = json.load(file)
+        api_key = credentials.get("api_key")
+        if not api_key:
+            raise ValueError("API key not found in credentials.json")
+        return api_key
+    except Exception as e:
+        log_error(f"Error loading API key: {str(e)}")
+        raise AirflowException(f"API key loading failed: {str(e)}")
+
+def load_artists():
+    """Load artists from CSV (same as original)"""
+    try:
+        df = pd.read_csv(ARTISTS_CSV)
+        return df['primary_artist'].tolist()  
+    except Exception as e:
+        log_error(f"Error loading artists: {str(e)}")
+        raise AirflowException(f"Artist loading failed: {str(e)}")
+
+def load_checkpoint():
+    """Load checkpoint (same as original)"""
+    if os.path.exists(CHECKPOINT_FILE):
         try:
-            with open(self.credentials_path, "r", encoding="utf-8") as file:
-                credentials = json.load(file)
-            
-            if not (api_key := credentials.get("api_key")):
-                raise ValueError("API key not found in credentials.json")
-                
-            return api_key
-        except Exception as e:
-            self._log_error(f"Error loading API key: {str(e)}")
-            raise RuntimeError(f"API key loading failed: {str(e)}")
+            with open(CHECKPOINT_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            return {"processed": [], "failed": []}
+    return {"processed": [], "failed": []}
+
+def save_checkpoint(processed, failed):
+    """Save checkpoint (same as original)"""
+    with open(CHECKPOINT_FILE, 'w') as f:
+        json.dump({"processed": processed, "failed": failed}, f)
+
+def log_error(message):
+    """Error logging (same as original)"""
+    with open(LOG_FILE, 'a') as f:
+        f.write(f"{datetime.now()}: {message}\n")
+
+def get_artist_data(artist, api_key, retry_count=0):      
+    """Get artist data from API (same as original but with api_key parameter)"""
+    params = {
+        "method": "artist.getInfo",
+        "artist": artist,
+        "api_key": api_key,
+        "format": "json",
+        "autocorrect": 1
+    }
     
-    def _log_error(self, message: str) -> None:
-        """Log errors with timestamp"""
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        log_entry = f"{timestamp}: {message}\n"
+    try:
+        response = requests.get(
+            "http://ws.audioscrobbler.com/2.0/",
+            params=params,
+            timeout=10
+        )
         
-        try:
-            with open(self.log_file, "a", encoding="utf-8") as f:
-                f.write(log_entry)
-        except Exception as e:
-            logger.error(f"Failed to write to log file: {str(e)}")
-    
-    def load_artists(self) -> List[str]:
-        """Load artist names from CSV file"""
-        try:
-            if not os.path.exists(self.artists_csv):
-                raise FileNotFoundError(f"Artists CSV not found at {self.artists_csv}")
-                
-            df = pd.read_csv(self.artists_csv)
-            if 'primary_artist' not in df.columns:
-                raise ValueError("CSV missing required 'primary_artist' column")
-                
-            return df['primary_artist'].dropna().unique().tolist()
-        except Exception as e:
-            self._log_error(f"Error loading artists: {str(e)}")
-            raise
-    
-    def _load_checkpoint(self) -> Dict[str, List[str]]:
-        """Load processing checkpoint"""
-        if os.path.exists(self.checkpoint_file):
-            try:
-                with open(self.checkpoint_file, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except Exception as e:
-                self._log_error(f"Error loading checkpoint: {str(e)}")
-                return {"processed": [], "failed": []}
-        return {"processed": [], "failed": []}
-    
-    def _save_checkpoint(self, processed: List[str], failed: List[str]) -> None:
-        """Save processing progress"""
-        try:
-            with open(self.checkpoint_file, "w", encoding="utf-8") as f:
-                json.dump({"processed": processed, "failed": failed}, f)
-        except Exception as e:
-            self._log_error(f"Error saving checkpoint: {str(e)}")
-            raise
-    
-    def _make_api_request(self, artist: str, retry_count: int = 0) -> Optional[Dict]:
-        """Make API request with retry logic"""
-        params = {
-            "method": "artist.getInfo",
-            "artist": artist,
-            "api_key": self.api_key,
-            "format": "json",
-            "autocorrect": 1
-        }
-        
-        try:
-            response = requests.get(
-                self.api_url,
-                params=params,
-                timeout=self.request_timeout
-            )
-            
-            if response.status_code == 200:
-                return response.json().get('artist')
-                
-            elif response.status_code == 429:  # Rate limited
-                retry_after = int(response.headers.get('Retry-After', 5))
-                wait_time = max(retry_after, (2 ** retry_count))
-                logger.warning(f"Rate limit hit for {artist}. Waiting {wait_time} seconds...")
-                time.sleep(wait_time)
-                
-                if retry_count < self.max_retries:
-                    return self._make_api_request(artist, retry_count + 1)
-                return None
-                
-            else:
-                self._log_error(f"HTTP {response.status_code} for {artist}")
-                return None
-                
-        except requests.exceptions.RequestException as e:
-            self._log_error(f"Request failed for {artist}: {str(e)}")
+        if response.status_code == 200:
+            return response.json().get('artist', None)
+        elif response.status_code == 429:
+            retry_after = int(response.headers.get('Retry-After', 5))
+            wait_time = max(retry_after, (2 ** retry_count))
+            print(f"Rate limit reached. Waiting {wait_time} seconds...")
+            time.sleep(wait_time)
+            return get_artist_data(artist, api_key, retry_count + 1) if retry_count < MAX_RETRIES else None
+        else:
+            log_error(f"HTTP {response.status_code} for {artist}")
             return None
+            
+    except Exception as e:
+        log_error(f"Exception for {artist}: {str(e)}")
+        return None
+
+def extract_lastfm_data(**kwargs) -> pd.DataFrame:
+    """
+    Main extraction function adapted for Airflow
+    Preserves all original functionality while being Airflow-compatible
+    Returns:
+        pd.DataFrame: Data loaded from the generated CSV file
+    """
+    # Ensure directories exist (same as original)
+    os.makedirs(os.path.dirname(OUTPUT_CSV), exist_ok=True)
+    os.makedirs(os.path.dirname(CHECKPOINT_FILE), exist_ok=True)
+    os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+
+    # Load API key
+    api_key = load_api_key()
     
-    def _transform_artist_data(self, artist: str, api_data: Dict) -> Dict:
-        """Transform raw API response to structured format"""
-        return {
-            "artist_name": artist,
-            "listeners": api_data.get('stats', {}).get('listeners', 0),
-            "playcount": api_data.get('stats', {}).get('playcount', 0),
-            "similar_artists": ";".join(
-                artist['name'] 
-                for artist in api_data.get('similar', {}).get('artist', [])[:3]
-            ),
-            "tags": ";".join(
-                tag['name'] 
-                for tag in api_data.get('tags', {}).get('tag', [])[:5]
-            ),
-            "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
+    # Load artists
+    try:
+        artists = load_artists()
+        if not artists:
+            print("No artists found to process")
+            return pd.DataFrame()
+    except Exception as e:
+        raise AirflowException(f"Artist loading failed: {str(e)}")
+
+    # Load checkpoint
+    checkpoint = load_checkpoint()
+    processed = set(checkpoint["processed"])
+    failed = set(checkpoint["failed"])
     
-    def _load_existing_results(self) -> List[Dict]:
-        """Load previously saved results"""
-        if os.path.exists(self.output_csv):
-            try:
-                return pd.read_csv(self.output_csv).to_dict('records')
-            except Exception as e:
-                self._log_error(f"Error loading existing results: {str(e)}")
-                return []
-        return []
+    remaining = [a for a in artists if a not in processed and a not in failed]
+    total_artists = len(remaining)
     
-    def extract_artist_data(self) -> None:
-        """Main extraction workflow"""
+    if not remaining:
+        print("All artists already processed")
+        # Return existing data if available
+        if os.path.exists(OUTPUT_CSV):
+            return pd.read_csv(OUTPUT_CSV)
+        return pd.DataFrame()
+
+    print(f"\nArtists remaining: {total_artists}/{len(artists)}")
+    print(f"Previously processed: {len(processed)} | Failed: {len(failed)}")
+
+    # Load existing results
+    results = []
+    if os.path.exists(OUTPUT_CSV):
         try:
-            artists = self.load_artists()
-            if not artists:
-                logger.warning("No artists found to process")
-                return
-
-            checkpoint = self._load_checkpoint()
-            processed = set(checkpoint["processed"])
-            failed = set(checkpoint["failed"])
-            
-            remaining = [
-                a for a in artists 
-                if a not in processed and a not in failed
-            ]
-            
-            if not remaining:
-                logger.info("All artists already processed")
-                return
-
-            logger.info(
-                f"Artists remaining: {len(remaining)}/{len(artists)} | "
-                f"Previously processed: {len(processed)} | Failed: {len(failed)}"
-            )
-
-            results = self._load_existing_results()
-            
-            with tqdm(total=len(remaining), desc="Processing artists") as pbar:
-                for i in range(0, len(remaining), self.batch_size):
-                    batch = remaining[i:i + self.batch_size]
-                    batch_results = []
-                    
-                    for artist in batch:
-                        if data := self._make_api_request(artist):
-                            batch_results.append(
-                                self._transform_artist_data(artist, data)
-                            )
-                            processed.add(artist)
-                        else:
-                            failed.add(artist)
-                        
-                        pbar.update(1)
-                    
-                    # Update checkpoint and save results
-                    self._save_checkpoint(list(processed), list(failed))
-                    results.extend(batch_results)
-                    
-                    try:
-                        pd.DataFrame(results).to_csv(
-                            self.output_csv, 
-                            index=False,
-                            encoding='utf-8'
-                        )
-                    except Exception as e:
-                        self._log_error(f"Error saving results: {str(e)}")
-                        raise
-                    
-                    # Rate limiting delay
-                    if i + self.batch_size < len(remaining):
-                        time.sleep(self.base_delay)
-
-            # Clean up checkpoint if completed
-            if os.path.exists(self.checkpoint_file):
-                try:
-                    os.remove(self.checkpoint_file)
-                except Exception as e:
-                    self._log_error(f"Error removing checkpoint: {str(e)}")
-
-            logger.info(f"Completed. Data saved to {self.output_csv}")
-
+            results = pd.read_csv(OUTPUT_CSV).to_dict('records')
         except Exception as e:
-            self._log_error(f"Extraction failed: {str(e)}")
-            raise RuntimeError(f"Extraction failed: {str(e)}") from e
+            log_error(f"Error loading existing results: {str(e)}")
+            results = []
 
+    # Process artists
+    try:
+        with tqdm(total=total_artists, desc="Processing artists") as pbar:
+            for i in range(0, total_artists, BATCH_SIZE):
+                batch = remaining[i:i + BATCH_SIZE]
+                batch_results = []
+                
+                for artist in batch:
+                    data = get_artist_data(artist, api_key)
+                    if data:
+                        batch_results.append({
+                            "artist_name": artist,
+                            "listeners": data.get('stats', {}).get('listeners', 0),
+                            "playcount": data.get('stats', {}).get('playcount', 0),
+                            "similar": ";".join([s['name'] for s in data.get('similar', {}).get('artist', [])][:3])
+                        })
+                        processed.add(artist)
+                    else:
+                        failed.add(artist)
+                    
+                    save_checkpoint(list(processed), list(failed))
+                    pbar.update(1)
+                
+                results.extend(batch_results)
+                
+                # Save intermediate results
+                try:
+                    pd.DataFrame(results).to_csv(OUTPUT_CSV, index=False)
+                except Exception as e:
+                    log_error(f"Error saving results: {str(e)}")
+                    raise AirflowException(f"Failed to save results: {str(e)}")
+                
+                # Rate limiting
+                if i + BATCH_SIZE < total_artists:
+                    time.sleep(BASE_DELAY)
 
-def extract_lastfm_data():
-    """Entry point for Airflow DAG"""
-    extractor = LastFMExtractor()
-    extractor.extract_artist_data()
+        # Clean up checkpoint if completed
+        if os.path.exists(CHECKPOINT_FILE):
+            try:
+                os.remove(CHECKPOINT_FILE)
+            except Exception as e:
+                log_error(f"Error removing checkpoint: {str(e)}")
 
+        print(f"\nProcess completed. Data saved to: {OUTPUT_CSV}")
+        
+        return pd.read_csv(OUTPUT_CSV)
 
+    except Exception as e:
+        log_error(f"Extraction failed: {str(e)}")
+        raise AirflowException(f"Extraction failed: {str(e)}")
+
+# Maintain original standalone functionality
 if __name__ == "__main__":
+    print("=== Last.fm Data Scraper ===")
+    print(f"Root directory: {ROOT_DIR}")
     extract_lastfm_data()

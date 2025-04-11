@@ -10,3 +10,4 @@ credentials.json
 # pycache
 
 /airflow/tasks/__pycache__/
+/airflow/tasks/service_account.json
