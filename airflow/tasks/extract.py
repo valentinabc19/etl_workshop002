@@ -3,7 +3,7 @@ import json
 import pandas as pd
 from sqlalchemy import create_engine
 
-def extract_data(path, table_name, base_dir=None):
+def extract_grammy_data(path, table_name, base_dir=None):
 
 
     if base_dir is None:

@@ -6,21 +6,36 @@ import json
 from tqdm import tqdm
 from datetime import datetime
 
-# --- Configuración de rutas ---
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ARTISTS_CSV = os.path.join(ROOT_DIR, "data", "raw", "artists.csv")
 OUTPUT_CSV = os.path.join(ROOT_DIR, "data", "raw", "lastfm_data.csv")
 CHECKPOINT_FILE = os.path.join(ROOT_DIR, "tmp", "lastfm_checkpoint.json")
 LOG_FILE = os.path.join(ROOT_DIR, "logs", "lastfm_errors.log")
+CREDENTIALS_PATH = os.path.join(ROOT_DIR, "credentials.json")
+API_KEY = None
 
-# Crear carpetas si no existen
-os.makedirs(os.path.dirname(ARTISTS_CSV), exist_ok=True)
+
 os.makedirs(os.path.dirname(OUTPUT_CSV), exist_ok=True)
 os.makedirs(os.path.dirname(CHECKPOINT_FILE), exist_ok=True)
 os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
 
+print(CREDENTIALS_PATH)
+
+def load_api_key():
+    global API_KEY
+    try:
+        with open(CREDENTIALS_PATH, "r", encoding="utf-8") as file:
+            credentials = json.load(file)
+        API_KEY = credentials["api_key"]
+        if not API_KEY:
+            raise ValueError("API key no encontrada en credentials.json")
+    except Exception as e:
+        log_error(f"Error cargando API key: {str(e)}")
+        raise
+
+
+load_api_key()
 # --- Configuración API ---
-API_KEY = "f734d9017ce700181dfbfd9282257ac5"  # Reemplaza con tu API key
 BATCH_SIZE = 10
 BASE_DELAY = 0.5
 MAX_RETRIES = 3
@@ -32,7 +47,7 @@ def load_artists():
         df = pd.read_csv(ARTISTS_CSV)
         return df['primary_artist'].tolist()  
     except Exception as e:
-        print(f"Error cargando artistas: {str(e)}")
+        print(f"Error loading artists: {str(e)}")
         return []
 
 # --- Persistencia ---
@@ -57,7 +72,7 @@ def log_error(message):
         f.write(f"{datetime.now()}: {message}\n")
 
 # --- API Request ---
-def get_artist_data(artist, retry_count=0):
+def get_artist_data(artist, retry_count=0):      
     params = {
         "method": "artist.getInfo",
         "artist": artist,
@@ -126,7 +141,6 @@ def fetch_artist_data():
                         "artist_name": artist,
                         "listeners": data.get('stats', {}).get('listeners', 0),
                         "playcount": data.get('stats', {}).get('playcount', 0),
-                        "tags": ";".join([t['name'] for t in data.get('tags', {}).get('tag', [])][:5]),
                         "similar": ";".join([s['name'] for s in data.get('similar', {}).get('artist', [])][:3])
                     })
                     processed.add(artist)
