@@ -1,6 +1,6 @@
 """
 dag_workshop.py
-Final fixed version matching your project structure
+Final working version with absolute imports
 """
 
 import os
@@ -11,24 +11,24 @@ from airflow.operators.python import PythonOperator
 from airflow.utils.task_group import TaskGroup
 from airflow.models import Variable
 
-# Correct path configuration for your structure
+# Configure Python path
 DAG_DIR = os.path.dirname(os.path.abspath(__file__))
 AIRFLOW_DIR = os.path.dirname(DAG_DIR)
 PROJECT_ROOT = os.path.dirname(AIRFLOW_DIR)
-sys.path.insert(0, PROJECT_ROOT)
+sys.path.append(AIRFLOW_DIR)  # Add airflow/ directory to path
 
-# Import using relative path from dag/ directory
+# Absolute imports
 try:
-    from ..tasks.extract import (
+    from tasks.extract import (
         extract_spotify_data,
-        extract_grammy_data
+        extract_grammy_data,
+        extract_lastfm_data
     )
-    from ..tasks.extract_api import extract_lastfm_data
-    from ..tasks.transform_spotify import transform_spotify_data
-    from ..tasks.transform_grammy import transform_grammy_data
-    from ..tasks.transform_api import transform_lastfm_data
-    from ..tasks.merge import merge_datasets
-    from ..tasks.load import (
+    from tasks.transform_spotify import transform_spotify_data
+    from tasks.transform_grammy import transform_grammy_data
+    from tasks.transform_apl import transform_lastfm_data
+    from tasks.merge import merge_datasets
+    from tasks.load import (
         load_to_postgresql,
         export_to_drive
     )
@@ -37,6 +37,7 @@ except ImportError as e:
         f"Import failed: {str(e)}\n"
         f"Current directory: {os.getcwd()}\n"
         f"DAG_DIR: {DAG_DIR}\n"
+        f"AIRFLOW_DIR: {AIRFLOW_DIR}\n"
         f"PROJECT_ROOT: {PROJECT_ROOT}\n"
         f"Python path: {sys.path}\n"
         f"Contents of tasks dir: {os.listdir(os.path.join(AIRFLOW_DIR, 'tasks'))}"
