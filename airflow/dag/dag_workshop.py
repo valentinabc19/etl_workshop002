@@ -75,7 +75,7 @@ with DAG(
             task_id='extract_grammy',
             python_callable=extract_grammy_data,
             op_kwargs={
-                'path': os.path.join('data', 'raw', 'grammy.csv'),
+                'path': os.path.join('data', 'raw', 'the_grammy_awards.csv'),
                 'table_name': 'grammy_raw',
                 'base_dir': PROJECT_ROOT
             }
