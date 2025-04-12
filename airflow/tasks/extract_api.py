@@ -13,7 +13,7 @@ from datetime import datetime
 from airflow.exceptions import AirflowException
 
 # Constants (same as original)
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.abspath(os.path.join(__file__, "../../../"))
 ARTISTS_CSV = os.path.join(ROOT_DIR, "data", "raw", "artists.csv")
 OUTPUT_CSV = os.path.join(ROOT_DIR, "data", "raw", "lastfm_data.csv")
 CHECKPOINT_FILE = os.path.join(ROOT_DIR, "tmp", "lastfm_checkpoint.json")
