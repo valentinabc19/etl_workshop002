@@ -1,32 +1,42 @@
 """
 dag_workshop.py
-Fixed ETL DAG for your project structure
+Fixed version with proper module imports
 """
 
+import os
+import sys
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.utils.task_group import TaskGroup
 from airflow.models import Variable
-import os
 
-# Import modules using absolute paths
+# Add project root to Python path
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, PROJECT_ROOT)
+
+print(f"PROJECT_ROOT: {PROJECT_ROOT}")
+print(f"Python path: {sys.path}")
+print(f"Contents of tasks dir: {os.listdir(os.path.join(PROJECT_ROOT, 'airflow', 'tasks'))}")
+
 try:
-    from tasks.extract import (
+    from airflow.tasks.extract import (
         extract_spotify_data,
-        extract_grammy_data,
-        extract_lastfm_data
+        extract_grammy_data
     )
-    from tasks.transform_spotify import transform_spotify_data
-    from tasks.transform_grammy import transform_grammy_data
-    from tasks.transform_apl import transform_lastfm_data
-    from tasks.merge import merge_datasets
-    from tasks.load import (
+    from airflow.tasks.extract_api import extract_lastfm_data
+    from airflow.tasks.transform_spotify import transform_spotify_data
+    from airflow.tasks.transform_grammy import transform_grammy_data
+    from airflow.tasks.transform_api import transform_lastfm_data
+    from airflow.tasks.merge import merge_datasets
+    from airflow.tasks.load import (
         load_to_postgresql,
         export_to_drive
     )
 except ImportError as e:
-    raise ImportError(f"Failed to import modules: {str(e)}. Check your tasks/ directory structure.")
+    raise ImportError(f"Import failed: {str(e)}\n"
+                     f"PROJECT_ROOT: {PROJECT_ROOT}\n"
+                     f"Python path: {sys.path}")
 
 default_args = {
     'owner': 'airflow',
@@ -37,19 +47,12 @@ default_args = {
     'execution_timeout': timedelta(minutes=30),
 }
 
-# Get absolute path to project root
-try:
-    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-except Exception as e:
-    raise RuntimeError(f"Could not determine project root: {str(e)}")
-
 with DAG(
     'etl_workshop002',
     default_args=default_args,
-    description='Optimized ETL pipeline for music data',
-    schedule_interval=None,  # Changed from '@weekly' to None for debugging
+    description='ETL pipeline for music data',
+    schedule_interval=None,  # Manual triggers for debugging
     catchup=False,
-    max_active_runs=1,
 ) as dag:
 
     # Extract Phase
@@ -59,7 +62,7 @@ with DAG(
             python_callable=extract_spotify_data,
             op_kwargs={
                 'path': 'data/raw/spotify_dataset.csv',
-                'base_dir': PROJECT_ROOT  # Using absolute path
+                'base_dir': PROJECT_ROOT
             }
         )
         
@@ -112,8 +115,7 @@ with DAG(
             python_callable=load_to_postgresql,
             op_kwargs={
                 'table_name': 'music_analytics_merged',
-                'chunk_size': 500,
-                'credentials_path': os.path.join(PROJECT_ROOT, 'tasks', 'credentials.json')
+                'credentials_path': os.path.join(PROJECT_ROOT, 'airflow', 'tasks', 'credentials.json')
             }
         )
         
@@ -122,19 +124,9 @@ with DAG(
             python_callable=export_to_drive,
             op_kwargs={
                 'drive_folder_id': Variable.get("drive_folder_id", default_var=""),
-                'service_account_path': os.path.join(PROJECT_ROOT, 'tasks', 'service_account.json')
+                'service_account_path': os.path.join(PROJECT_ROOT, 'airflow', 'tasks', 'service_account.json')
             }
         )
 
     # Set up dependencies
     extract_group >> transform_group >> merge_data >> load_group
-
-    # Add documentation
-    dag.doc_md = f"""
-    ## ETL Workshop 002 Pipeline
-    Project Root: {PROJECT_ROOT}
-    Data Paths:
-    - Spotify: {os.path.join(PROJECT_ROOT, 'data/raw/spotify_dataset.csv')}
-    - Grammy: {os.path.join(PROJECT_ROOT, 'data/raw/grammy.csv')}
-    - LastFM: {os.path.join(PROJECT_ROOT, 'data/raw/lastfm_data.csv')}
-    """
