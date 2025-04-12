@@ -2,11 +2,10 @@
 dag_workshop.py
 Fixed version with proper module imports
 """
-
+from airflow import DAG
 import os
 import sys
 from datetime import datetime, timedelta
-from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.utils.task_group import TaskGroup
 from airflow.models import Variable
