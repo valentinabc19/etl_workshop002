@@ -30,10 +30,10 @@ Levenshtein==0.27.1
 matplotlib==3.10.1
 matplotlib-inline==0.1.7
 nest-asyncio==1.6.0
-numpy==2.2.4
+numpy==1.26.4
 oauthlib==3.2.2
 packaging==24.2
-pandas==2.2.3
+pandas==2.1.4
 parso==0.8.4
 pillow==11.1.0
 platformdirs==4.3.7

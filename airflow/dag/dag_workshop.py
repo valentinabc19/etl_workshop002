@@ -21,12 +21,12 @@ sys.path.append(AIRFLOW_DIR)  # Add airflow/ directory to path
 try:
     from tasks.extract import (
         extract_spotify_data,
-        extract_grammy_data,
-        extract_lastfm_data
+        extract_grammy_data
     )
+    from tasks.extract_api import extract_lastfm_data
     from tasks.transform_spotify import transform_spotify_data
     from tasks.transform_grammy import transform_grammy_data
-    from tasks.transform_apl import transform_lastfm_data
+    from tasks.transform_api import transform_lastfm_data
     from tasks.merge import merge_datasets
     from tasks.load import (
         load_to_postgresql,
