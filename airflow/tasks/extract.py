@@ -15,76 +15,37 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def get_database_connection(base_dir: str) -> create_engine:
-    """Helper function to create database connection engine.
-    
-    Args:
-        base_dir: Directory containing credentials.json
-        
-    Returns:
-        Initialized SQLAlchemy engine
-        
-    Raises:
-        RuntimeError: If credentials are invalid or connection fails
+def extract_grammy_data(path, base_dir=None) -> pd.DataFrame:
     """
-    try:
-        credentials_path = os.path.join(base_dir, "credentials.json")
-        with open(credentials_path, "r", encoding="utf-8") as file:
-            credentials = json.load(file)
-        
-        return create_engine(
-            f"postgresql://{credentials['db_user']}:{credentials['db_password']}@"
-            f"{credentials['db_host']}:5432/{credentials['db_name']}?"
-            f"client_encoding=utf8&connect_timeout=10"
-        )
-    except Exception as e:
-        logger.error(f"Database connection failed: {str(e)}")
-        raise RuntimeError("Failed to establish database connection")
-
-
-def extract_grammy_data(path: str, table_name: str, base_dir: Optional[str] = None, if_exists: str = "replace") -> pd.DataFrame:
-    """Extracts Grammy awards data from CSV and loads to PostgreSQL.
+    Extracts Grammy Awards data from a CSV file and loads it into a PostgreSQL database table.
 
     Args:
         path: Relative path to the CSV file
-        table_name: Target table name in PostgreSQL
         base_dir: Base directory for paths (defaults to current directory)
-        if_exists: Behavior when table exists ('replace', 'append', 'fail')
 
     Returns:
-        Data loaded from PostgreSQL for validation
-
-    Raises:
-        FileNotFoundError: If CSV file doesn't exist
-        ValueError: If invalid parameters provided
-        RuntimeError: If extraction or loading fails
+        pd.DataFrame: A DataFrame containing the loaded Grammy Awards data.
     """
-    try:
-        if if_exists not in ('replace', 'append', 'fail'):
-            raise ValueError("if_exists must be 'replace', 'append', or 'fail'")
+    if base_dir is None:
+        base_dir = os.getcwd()
 
-        base_dir = base_dir or os.getcwd()
-        csv_path = os.path.join(base_dir, path)
-        
-        if not os.path.exists(csv_path):
-            raise FileNotFoundError(f"CSV file not found: {csv_path}")
-        
-        logger.info(f"Loading Grammy data from {csv_path}")
-        grammys_data = pd.read_csv(csv_path, sep=",", encoding='utf-8')
-        
-        if grammys_data.empty:
-            logger.warning("Empty DataFrame loaded from CSV")
-        
-        pg_engine = get_database_connection(base_dir)
-        
-        grammys_data.to_sql(table_name, pg_engine, if_exists="replace", index=False)
-            
-        return pd.read_sql(f"SELECT * FROM {table_name};", pg_engine)
-            
-    except Exception as e:
-        logger.error(f"Grammy data extraction failed: {str(e)}")
-        raise RuntimeError(f"Grammy data extraction failed: {str(e)}")
+    with open(os.path.join(base_dir, "credentials.json"), "r", encoding="utf-8") as file:
+        credentials = json.load(file)
 
+    db_host = credentials["db_host"]
+    db_name = credentials["db_name"]
+    db_user = credentials["db_user"]
+    db_password = credentials["db_password"]
+
+    csv_path = os.path.join(base_dir, path)
+    grammys_data = pd.read_csv(csv_path, sep=",")
+
+    pg_engine = create_engine(f"postgresql://{db_user}:{db_password}@{db_host}:5432/{db_name}?client_encoding=utf8")
+
+    grammys_data.to_sql('grammy_raw_data', pg_engine, if_exists="replace", index=False)
+    
+            
+    return pd.read_sql(f"SELECT * FROM grammy_raw_data;", pg_engine)
 
 def extract_spotify_data(path: str, base_dir: Optional[str] = None) -> pd.DataFrame:
     """Extracts Spotify streaming data from CSV.
