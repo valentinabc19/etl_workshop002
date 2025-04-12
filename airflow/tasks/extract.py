@@ -75,23 +75,11 @@ def extract_grammy_data(path: str, table_name: str, base_dir: Optional[str] = No
         if grammys_data.empty:
             logger.warning("Empty DataFrame loaded from CSV")
         
-        engine = get_database_connection(base_dir)
+        pg_engine = get_database_connection(base_dir)
         
-        with engine.begin() as connection:
-            grammys_data.to_sql(
-                table_name,
-                connection,
-                if_exists=if_exists,
-                index=False,
-                method='multi',
-                chunksize=1000
-            )
+        grammys_data.to_sql(table_name, pg_engine, if_exists="replace", index=False)
             
-            verification_query = f"SELECT COUNT(*) as record_count FROM {table_name};"
-            result = pd.read_sql(verification_query, connection)
-            logger.info(f"Loaded {result.iloc[0]['record_count']} records to {table_name}")
-            
-            return pd.read_sql(f"SELECT * FROM {table_name};", connection)
+        return pd.read_sql(f"SELECT * FROM {table_name};", pg_engine)
             
     except Exception as e:
         logger.error(f"Grammy data extraction failed: {str(e)}")
