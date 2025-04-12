@@ -8,7 +8,7 @@
 ## **Project Overview**  
 This project automates the extraction, transformation and analysis of music data to identify patterns between:
 - **Critical acclaim** (Grammy Awards)
-- Commercial popularity** (Spotify)
+- **Commercial popularity** (Spotify)
 - **Community engagement** (Last.fm)
 
 ### **Key Features**  
