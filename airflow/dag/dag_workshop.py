@@ -1,41 +1,46 @@
 """
 dag_workshop.py
-Fixed version with proper module imports
+Final fixed version matching your project structure
 """
-from airflow import DAG
+
 import os
 import sys
 from datetime import datetime, timedelta
+from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.utils.task_group import TaskGroup
 from airflow.models import Variable
 
-# Add project root to Python path
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Correct path configuration for your structure
+DAG_DIR = os.path.dirname(os.path.abspath(__file__))
+AIRFLOW_DIR = os.path.dirname(DAG_DIR)
+PROJECT_ROOT = os.path.dirname(AIRFLOW_DIR)
 sys.path.insert(0, PROJECT_ROOT)
 
-print(f"PROJECT_ROOT: {PROJECT_ROOT}")
-print(f"Python path: {sys.path}")
-print(f"Contents of tasks dir: {os.listdir(os.path.join(PROJECT_ROOT, 'airflow', 'tasks'))}")
-
+# Import using relative path from dag/ directory
 try:
-    from airflow.tasks.extract import (
+    from ..tasks.extract import (
         extract_spotify_data,
         extract_grammy_data
     )
-    from airflow.tasks.extract_api import extract_lastfm_data
-    from airflow.tasks.transform_spotify import transform_spotify_data
-    from airflow.tasks.transform_grammy import transform_grammy_data
-    from airflow.tasks.transform_api import transform_lastfm_data
-    from airflow.tasks.merge import merge_datasets
-    from airflow.tasks.load import (
+    from ..tasks.extract_api import extract_lastfm_data
+    from ..tasks.transform_spotify import transform_spotify_data
+    from ..tasks.transform_grammy import transform_grammy_data
+    from ..tasks.transform_api import transform_lastfm_data
+    from ..tasks.merge import merge_datasets
+    from ..tasks.load import (
         load_to_postgresql,
         export_to_drive
     )
 except ImportError as e:
-    raise ImportError(f"Import failed: {str(e)}\n"
-                     f"PROJECT_ROOT: {PROJECT_ROOT}\n"
-                     f"Python path: {sys.path}")
+    raise ImportError(
+        f"Import failed: {str(e)}\n"
+        f"Current directory: {os.getcwd()}\n"
+        f"DAG_DIR: {DAG_DIR}\n"
+        f"PROJECT_ROOT: {PROJECT_ROOT}\n"
+        f"Python path: {sys.path}\n"
+        f"Contents of tasks dir: {os.listdir(os.path.join(AIRFLOW_DIR, 'tasks'))}"
+    )
 
 default_args = {
     'owner': 'airflow',
@@ -60,7 +65,7 @@ with DAG(
             task_id='extract_spotify',
             python_callable=extract_spotify_data,
             op_kwargs={
-                'path': 'data/raw/spotify_dataset.csv',
+                'path': os.path.join('data', 'raw', 'spotify_dataset.csv'),
                 'base_dir': PROJECT_ROOT
             }
         )
@@ -69,7 +74,7 @@ with DAG(
             task_id='extract_grammy',
             python_callable=extract_grammy_data,
             op_kwargs={
-                'path': 'data/raw/grammy.csv',
+                'path': os.path.join('data', 'raw', 'grammy.csv'),
                 'table_name': 'grammy_raw',
                 'base_dir': PROJECT_ROOT
             }
@@ -79,7 +84,7 @@ with DAG(
             task_id='extract_lastfm',
             python_callable=extract_lastfm_data,
             op_kwargs={
-                'path': 'data/raw/lastfm_data.csv',
+                'path': os.path.join('data', 'raw', 'lastfm_data.csv'),
                 'base_dir': PROJECT_ROOT
             }
         )
@@ -114,7 +119,7 @@ with DAG(
             python_callable=load_to_postgresql,
             op_kwargs={
                 'table_name': 'music_analytics_merged',
-                'credentials_path': os.path.join(PROJECT_ROOT, 'airflow', 'tasks', 'credentials.json')
+                'credentials_path': os.path.join(AIRFLOW_DIR, 'tasks', 'credentials.json')
             }
         )
         
@@ -123,7 +128,7 @@ with DAG(
             python_callable=export_to_drive,
             op_kwargs={
                 'drive_folder_id': Variable.get("drive_folder_id", default_var=""),
-                'service_account_path': os.path.join(PROJECT_ROOT, 'airflow', 'tasks', 'service_account.json')
+                'service_account_path': os.path.join(AIRFLOW_DIR, 'tasks', 'service_account.json')
             }
         )
 
