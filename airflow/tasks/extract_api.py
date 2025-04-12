@@ -42,7 +42,7 @@ def load_artists():
     """Load artists from CSV (same as original)"""
     try:
         df = pd.read_csv(ARTISTS_CSV)
-        return df['primary_artist'].tolist()  
+        return df['artist'].tolist()  
     except Exception as e:
         log_error(f"Error loading artists: {str(e)}")
         raise AirflowException(f"Artist loading failed: {str(e)}")
