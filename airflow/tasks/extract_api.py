@@ -102,20 +102,27 @@ def get_artist_data(artist, api_key, retry_count=0):
 
 def extract_lastfm_data(**kwargs) -> pd.DataFrame:
     """
-    Main extraction function adapted for Airflow
-    Preserves all original functionality while being Airflow-compatible
+    Main extraction function adapted for Airflow.
+    If the checkpoint does not exist and the output CSV exists,
+    skips extraction and loads from CSV.
+
     Returns:
         pd.DataFrame: Data loaded from the generated CSV file
     """
-    # Ensure directories exist (same as original)
     os.makedirs(os.path.dirname(OUTPUT_CSV), exist_ok=True)
     os.makedirs(os.path.dirname(CHECKPOINT_FILE), exist_ok=True)
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
 
-    # Load API key
+    if os.path.exists(OUTPUT_CSV) and not os.path.exists(CHECKPOINT_FILE):
+        print("Previously completed extraction. Loading data from CSV.")
+        try:
+            return pd.read_csv(OUTPUT_CSV)
+        except Exception as e:
+            log_error(f"Error loading existing CSV: {str(e)}")
+            raise AirflowException(f"The existing CSV could not be loaded: {str(e)}")
+
     api_key = load_api_key()
-    
-    # Load artists
+
     try:
         artists = load_artists()
         if not artists:
@@ -124,17 +131,15 @@ def extract_lastfm_data(**kwargs) -> pd.DataFrame:
     except Exception as e:
         raise AirflowException(f"Artist loading failed: {str(e)}")
 
-    # Load checkpoint
     checkpoint = load_checkpoint()
     processed = set(checkpoint["processed"])
     failed = set(checkpoint["failed"])
-    
+
     remaining = [a for a in artists if a not in processed and a not in failed]
     total_artists = len(remaining)
-    
+
     if not remaining:
-        print("All artists already processed")
-        # Return existing data if available
+        print("All artists already processed.")
         if os.path.exists(OUTPUT_CSV):
             return pd.read_csv(OUTPUT_CSV)
         return pd.DataFrame()
@@ -142,7 +147,6 @@ def extract_lastfm_data(**kwargs) -> pd.DataFrame:
     print(f"\nArtists remaining: {total_artists}/{len(artists)}")
     print(f"Previously processed: {len(processed)} | Failed: {len(failed)}")
 
-    # Load existing results
     results = []
     if os.path.exists(OUTPUT_CSV):
         try:
@@ -151,13 +155,12 @@ def extract_lastfm_data(**kwargs) -> pd.DataFrame:
             log_error(f"Error loading existing results: {str(e)}")
             results = []
 
-    # Process artists
     try:
         with tqdm(total=total_artists, desc="Processing artists") as pbar:
             for i in range(0, total_artists, BATCH_SIZE):
                 batch = remaining[i:i + BATCH_SIZE]
                 batch_results = []
-                
+
                 for artist in batch:
                     data = get_artist_data(artist, api_key)
                     if data:
@@ -170,24 +173,21 @@ def extract_lastfm_data(**kwargs) -> pd.DataFrame:
                         processed.add(artist)
                     else:
                         failed.add(artist)
-                    
+
                     save_checkpoint(list(processed), list(failed))
                     pbar.update(1)
-                
+
                 results.extend(batch_results)
-                
-                # Save intermediate results
+
                 try:
                     pd.DataFrame(results).to_csv(OUTPUT_CSV, index=False)
                 except Exception as e:
                     log_error(f"Error saving results: {str(e)}")
                     raise AirflowException(f"Failed to save results: {str(e)}")
-                
-                # Rate limiting
+
                 if i + BATCH_SIZE < total_artists:
                     time.sleep(BASE_DELAY)
 
-        # Clean up checkpoint if completed
         if os.path.exists(CHECKPOINT_FILE):
             try:
                 os.remove(CHECKPOINT_FILE)
@@ -195,14 +195,12 @@ def extract_lastfm_data(**kwargs) -> pd.DataFrame:
                 log_error(f"Error removing checkpoint: {str(e)}")
 
         print(f"\nProcess completed. Data saved to: {OUTPUT_CSV}")
-        
         return pd.read_csv(OUTPUT_CSV)
 
     except Exception as e:
         log_error(f"Extraction failed: {str(e)}")
         raise AirflowException(f"Extraction failed: {str(e)}")
 
-# Maintain original standalone functionality
 if __name__ == "__main__":
     print("=== Last.fm Data Scraper ===")
     print(f"Root directory: {ROOT_DIR}")
