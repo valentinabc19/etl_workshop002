@@ -28,7 +28,7 @@ def load_and_export_data(**kwargs) -> None:
     """
     try:
         ti = kwargs['ti']
-        merged_df = ti.xcom_pull(task_ids='merge_datasets_task')
+        merged_df = ti.xcom_pull(task_ids='merge_datasets')
 
         if merged_df is None or merged_df.empty:
             raise AirflowException("No merged data received")
