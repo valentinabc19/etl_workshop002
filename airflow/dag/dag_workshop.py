@@ -86,7 +86,8 @@ with DAG(
             op_kwargs={
                 'path': os.path.join('data', 'raw', 'lastfm_data.csv'),
                 'base_dir': PROJECT_ROOT
-            }
+            },
+            execution_timeout=timedelta(minutes=120)
         )
 
     # Transform Phase
