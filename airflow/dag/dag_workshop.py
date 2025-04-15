@@ -28,10 +28,7 @@ try:
     from tasks.transform_grammy import transform_grammy_data
     from tasks.transform_api import transform_lastfm_data
     from tasks.merge import merge_datasets
-    from tasks.load import (
-        load_to_postgresql,
-        export_to_drive
-    )
+    from tasks.load import load_and_export_data
 except ImportError as e:
     raise ImportError(
         f"Import failed: {str(e)}\n"
@@ -113,25 +110,10 @@ with DAG(
         python_callable=merge_datasets
     )
 
-    # Load Phase
-    with TaskGroup("load_phase") as load_group:
-        load_db = PythonOperator(
-            task_id='load_postgresql',
-            python_callable=load_to_postgresql,
-            op_kwargs={
-                'table_name': 'music_analytics_merged',
-                'credentials_path': os.path.join(AIRFLOW_DIR, 'tasks', 'credentials.json')
-            }
-        )
-        
-        export_csv = PythonOperator(
-            task_id='export_to_drive',
-            python_callable=export_to_drive,
-            op_kwargs={
-                'drive_folder_id': Variable.get("drive_folder_id", default_var=""),
-                'service_account_path': os.path.join(AIRFLOW_DIR, 'tasks', 'service_account.json')
-            }
-        )
+    load_data = PythonOperator(
+        task_id='load_data',
+        python_callable=load_and_export_data
+    )
 
     # Set up dependencies
-    extract_group >> transform_group >> merge_data >> load_group
+    extract_group >> transform_group >> merge_data >> load_data

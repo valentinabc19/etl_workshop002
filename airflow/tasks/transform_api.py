@@ -105,7 +105,7 @@ def transform_lastfm_data(**kwargs) -> pd.DataFrame:
     try:
         # Get DataFrame from previous task via XCom
         ti = kwargs['ti']
-        df = ti.xcom_pull(task_ids='extract_lastfm')
+        df = ti.xcom_pull(task_ids='extract_phase.extract_lastfm')
         
         if df is None or df.empty:
             raise AirflowException("No data received from extraction task")

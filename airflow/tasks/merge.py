@@ -14,9 +14,9 @@ def merge_datasets(**kwargs) -> pd.DataFrame:
         
         # Get DataFrames
         ti = kwargs['ti']
-        spotify_df = ti.xcom_pull(task_ids='transform_spotify')
-        grammy_df = ti.xcom_pull(task_ids='transform_grammy')
-        lastfm_df = ti.xcom_pull(task_ids='transform_lastfm')
+        spotify_df = ti.xcom_pull(task_ids='transform_phase.transform_spotify')
+        grammy_df = ti.xcom_pull(task_ids='transform_phase.transform_grammy')
+        lastfm_df = ti.xcom_pull(task_ids='transform_phase.transform_lastfm')
         
         # Validate
         if any(df is None or df.empty for df in [spotify_df, grammy_df, lastfm_df]):

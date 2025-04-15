@@ -71,7 +71,7 @@ def export_to_drive(df: pd.DataFrame) -> None:
     """Export DataFrame to Google Drive as CSV"""
     try:
         DRIVE_FOLDER_ID = "1ize2-haamshym7tY8wJ5efd648coydZ1"
-        SERVICE_ACCOUNT_FILE = os.path.join(os.getcwd(), "service_account.json")
+        SERVICE_ACCOUNT_FILE = os.path.join(os.path.dirname(__file__), "service_account.json")
 
         if not os.path.exists(SERVICE_ACCOUNT_FILE):
             raise AirflowException(f"Service account file not found: {SERVICE_ACCOUNT_FILE}")
@@ -88,8 +88,8 @@ def export_to_drive(df: pd.DataFrame) -> None:
             'parents': [DRIVE_FOLDER_ID]
         }
 
-        csv_buffer = io.StringIO()
-        df.to_csv(csv_buffer, index=False)
+        csv_buffer = io.BytesIO()
+        df.to_csv(csv_buffer, index=False, encoding='utf-8')
         csv_buffer.seek(0)
 
         media = MediaIoBaseUpload(csv_buffer, mimetype='text/csv', resumable=True)

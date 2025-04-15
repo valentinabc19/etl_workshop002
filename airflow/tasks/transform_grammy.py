@@ -25,7 +25,7 @@ def transform_grammy_data(**kwargs) -> pd.DataFrame:
     try:
         # Get DataFrame from previous task via XCom
         ti = kwargs['ti']
-        grammy_df = ti.xcom_pull(task_ids='extract_grammy')
+        grammy_df = ti.xcom_pull(task_ids='extract_phase.extract_grammy')
         
         if grammy_df is None or grammy_df.empty:
             raise AirflowException("No data received from extraction task")
