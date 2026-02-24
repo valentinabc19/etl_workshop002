@@ -31,14 +31,11 @@ The pipeline performs the following steps:
   - Stores the final enriched dataset in a PostgreSQL database.
   - Uploads the results to Google Drive.
 
-**Dashboard Visualizations**:  
-- Pendiente!!:
-
 ### **Technologies Used**  
 - Python 3.8+
 - Apache Airflow
 - PostgreSQL
-- Google Drive API credentials (optional) 
+- Google Drive API credentials
 
 ---
 
